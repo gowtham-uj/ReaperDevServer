@@ -441,6 +441,21 @@ test("podInspect selects the private-network IP and reports legacy security", as
   });
 });
 
+test("new pod security check accepts Docker API CAP_-prefixed capabilities", async () => {
+  const fake = new FakeDocker();
+  fake.addNetwork("alpha");
+  const context = await setup(fake);
+  // Modern Docker Engine reports `--cap-drop NET_RAW` as `CAP_NET_RAW` in
+  // the post-create inspect. Override the fake's inspect to simulate that.
+  const original = fake.inspectJson.bind(fake);
+  fake.inspectJson = (container) => {
+    const json = JSON.parse(original(container));
+    json[0].HostConfig.CapDrop = (container.capDrop || []).map((cap) => `CAP_${cap}`);
+    return JSON.stringify(json);
+  };
+  await assert.doesNotReject(ensurePod("alpha", projectPath(context, "alpha")));
+});
+
 test("destroy removes the owned pod, legacy allocation, and owned private network", async () => {
   const fake = new FakeDocker();
   const context = await setup(fake);
@@ -551,3 +566,4 @@ test("Docker command admission caps active work and rejects queue overflow", asy
   const settled = await Promise.allSettled(operations.slice(0, 40));
   assert.equal(settled.filter(({ status }) => status === "fulfilled").length, 40);
 });
+

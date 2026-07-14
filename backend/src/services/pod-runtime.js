@@ -170,8 +170,9 @@ function parseInspect(stdout) {
 function securityState(data) {
   const capDrop = Array.isArray(data.HostConfig?.CapDrop) ? data.HostConfig.CapDrop : [];
   const securityOpt = Array.isArray(data.HostConfig?.SecurityOpt) ? data.HostConfig.SecurityOpt : [];
+  const normalized = (cap) => String(cap).toUpperCase().replace(/^CAP_/, "");
   return {
-    netRawDropped: capDrop.some((capability) => String(capability).toUpperCase() === "NET_RAW"),
+    netRawDropped: capDrop.some((capability) => normalized(capability) === "NET_RAW"),
     noNewPrivileges: securityOpt.some((option) => /^no-new-privileges(?::true)?$/i.test(String(option)))
   };
 }
