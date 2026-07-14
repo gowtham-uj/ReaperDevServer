@@ -26,7 +26,7 @@ for (const d of [VPS_PROJECTS, STATE_DIR, path.dirname(GLOBAL_ENV)]) {
 const PORT = Number(process.env.REAPER_PORT || process.env.PORT || 4000);
 function requiredSecret(name) {
   const value = String(process.env[name] || "").trim();
-  if (value.length < 32 || /(?:change-me|v2-dev|reaper-dev)/i.test(value)) {
+  if (value.length < 32 || /(?:change-me|change_me|placeholder|example-secret)/i.test(value)) {
     throw new Error(`${name} must be a non-placeholder secret of at least 32 characters`);
   }
   return value;
@@ -89,7 +89,7 @@ await (async () => {
     if (!/^[A-Za-z0-9_.-]{3,64}$/.test(ADMIN_USER)) {
       throw new Error("APP_ADMIN_USERNAME is required on first boot and must be 3–64 safe characters");
     }
-    if (ADMIN_PASS.length < 12 || /(?:change-me|password|reaper@9908|reaper-dev)/i.test(ADMIN_PASS)) {
+    if (ADMIN_PASS.length < 12 || /(?:change-me|change_me|placeholder|example-password)/i.test(ADMIN_PASS)) {
       throw new Error("APP_ADMIN_PASSWORD is required on first boot and must be a non-placeholder value of at least 12 characters");
     }
     state.users.push({

@@ -6,11 +6,11 @@
 	}
 }
 
-http://{$REAPER_HOST:167.86.121.124} {
+http://{$REAPER_HOST:?Set REAPER_HOST in the Caddy environment} {
 	redir https://{host}{uri} 308
 }
 
-https://{$REAPER_HOST:167.86.121.124} {
+https://{$REAPER_HOST:?Set REAPER_HOST in the Caddy environment} {
 	tls {
 		issuer acme {
 			dir https://acme-v02.api.letsencrypt.org/directory

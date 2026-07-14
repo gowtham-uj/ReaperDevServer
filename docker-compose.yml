@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      REAPER_HOST: ${APEX_DOMAIN:-167.86.121.124}
+      REAPER_HOST: ${APEX_DOMAIN:?Set APEX_DOMAIN in app/.env}
     depends_on:
       - backend
     volumes:

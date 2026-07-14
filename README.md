@@ -55,7 +55,7 @@ cp .env.example .env
 ```
 
 ```env
-APP_ADMIN_USERNAME=reaper_dev
+APP_ADMIN_USERNAME=
 APP_ADMIN_PASSWORD=replace-with-a-strong-password
 JWT_ACCESS_SECRET=replace-with-a-long-random-secret
 APEX_DOMAIN=example.com
