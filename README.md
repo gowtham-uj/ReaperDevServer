@@ -5,7 +5,87 @@ project, persistent terminals, scoped tokens, and authenticated published
 ports. Files, env, and shells survive browser restarts, network drops, and
 backend redeploys.
 
+## UI tour
+
+The screenshots below come from a reference deployment of Reaper V2. The
+demo project shown is named `sample-app`; replace it with your own project
+name in practice. Nothing in the tour reflects private workspace contents.
+
+### Login
+
+![Reaper V2 login screen](docs/screenshots/01-login.png)
+
+A single-field username and password form. Sign-up is disabled by default;
+the operator creates the first admin by setting `APP_ADMIN_USERNAME` and
+`APP_ADMIN_PASSWORD` in `/app/.env` before first boot.
+
+### Projects
+
+![Reaper V2 projects grid](docs/screenshots/02-projects.png)
+
+Every workspace directory under `/app/workspace` is a project. Each card
+links to Files, Terminal, and Settings. The three top-left cards in this
+screenshot have been redacted for the public README; the lone populated
+card on the bottom-right is the `sample-app` reference project.
+
+### Project terminal
+
+![Reaper V2 project terminal](docs/screenshots/03-project-terminal.png)
+
+A persistent tmux session running inside the project's own Linux pod. The
+terminal grid is canonical across viewers, replays capture-pane history
+before live output, and uses xterm.js with WebGL, Unicode 11 cell widths,
+and JetBrains Mono. Closing the tab, losing the network, or restarting
+the backend only detaches the viewer; the underlying process and shell
+survive.
+
+### Project files
+
+![Reaper V2 project files](docs/screenshots/04-project-files.png)
+
+The same files as the project pod sees at `/work`. Tree navigation,
+inline edit, upload, and delete; directory traversal and symlink escapes
+out of the project are rejected by the backend.
+
+### Project sessions
+
+![Reaper V2 project sessions](docs/screenshots/05-project-sessions.png)
+
+Named persistent sessions inside the project pod. Multiple terminal
+windows can be open simultaneously and survive backend restarts. The
+explicit `Delete` action stops the exact tmux session and archives its
+log; rename changes only the title.
+
+### Project settings
+
+![Reaper V2 project settings](docs/screenshots/06-project-settings.png)
+
+Project-scoped environment values, the bash startup configuration, and
+project API tokens. The audit log for the project is also reachable from
+here. Scoped tokens can't manage interactive credentials and cannot
+manage other projects.
+
+### Global settings
+
+![Reaper V2 global settings](docs/screenshots/09-settings-global.png)
+
+The shared environment passed to every project pod, and global API
+tokens for personal automation. API keys, provider URLs, and shared
+secrets belong here. Changes propagate to live project pods through the
+queued worker with `latest-wins` semantics.
+
+### Audit log
+
+![Reaper V2 audit log](docs/screenshots/10-audit-global.png)
+
+The last 200 events: logins, token creation, project operations, and bot
+blocks. The viewer is page-scoped and only renders the most recent
+entries; the full history lives in `/app/backend-state/audit.log`.
+
+
 ## Runtime architecture
+
+
 
 - **Caddy** terminates HTTPS, serves `frontend-v2/dist`, proxies `/api/*` and `/terminal/ws`, and loads generated routes for published project ports.
 - **Backend** is a Node.js API on loopback port `4000`. It owns authentication, project files and settings, terminal control, project-pod lifecycle, and Caddy route generation.
