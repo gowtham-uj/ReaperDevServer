@@ -1,4 +1,4 @@
-# Reaper V2
+# Reaper Dev Server
 
 A self-hosted dev server for the agentic era — one durable Linux pod per
 project, persistent terminals, scoped tokens, and authenticated published
