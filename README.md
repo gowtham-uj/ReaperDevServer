@@ -146,7 +146,6 @@ APP_ADMIN_USERNAME=
 APP_ADMIN_PASSWORD=replace-with-a-strong-password
 JWT_ACCESS_SECRET=replace-with-a-long-random-secret
 REAPER_HOST=203.0.113.10
-REAPER_TLS=internal
 APEX_DOMAIN=
 COOKIE_DOMAIN=
 ```
@@ -155,12 +154,11 @@ For a domain deployment:
 
 ```env
 REAPER_HOST=dev.example.com
-REAPER_TLS=admin@example.com
 APEX_DOMAIN=dev.example.com
 COOKIE_DOMAIN=dev.example.com
 ```
 
-`APP_ADMIN_PASSWORD` must be at least 12 characters and `JWT_ACCESS_SECRET` must be a long random value. IP deployments publish a project container port at `https://<REAPER_HOST>:<containerPort>/`; the port must be at least 1024, available on the host, and unique across projects. Caddy signs IP certificates with its local CA, so clients must trust the Caddy root certificate. Domain deployments publish `https://<route>.<APEX_DOMAIN>/` and require matching wildcard DNS. Domain publishing shares the Reaper authentication cookie with trusted project subdomains; do not treat published applications as hostile multi-tenant origins.
+`APP_ADMIN_PASSWORD` must be at least 12 characters and `JWT_ACCESS_SECRET` must be a long random value. IP deployments publish a project container port at `https://<REAPER_HOST>:<containerPort>/`; the port must be at least 1024, available on the host, and unique across projects. Caddy requests publicly trusted, short-lived ACME certificates for the main IP and published IP ports. Domain deployments publish `https://<route>.<APEX_DOMAIN>/` and require matching wildcard DNS. Domain publishing shares the Reaper authentication cookie with trusted project subdomains; do not treat published applications as hostile multi-tenant origins.
 
 Build the frontend, then run the guarded deployment:
 

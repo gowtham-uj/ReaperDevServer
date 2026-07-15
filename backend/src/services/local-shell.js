@@ -1048,7 +1048,9 @@ function publishedCaddyBlock(config, port) {
   const address = config.mode === "ip"
     ? `https://${config.caddyHost}:${port.containerPort}`
     : `https://${port.subdomain}.${config.host}`;
-  const tls = config.mode === "ip" ? "\n\ttls internal" : "";
+  const tls = config.mode === "ip"
+    ? "\n\ttls {\n\t\tissuer acme {\n\t\t\tdir https://acme-v02.api.letsencrypt.org/directory\n\t\t\tprofile shortlived\n\t\t}\n\t}"
+    : "";
   return `${address} {${tls}\n\theader {\n\t\t-Server\n\t\tX-Content-Type-Options "nosniff"\n\t\tX-Frame-Options "SAMEORIGIN"\n\t\tReferrer-Policy "same-origin"\n\t\tX-Robots-Tag "noindex, nofollow, noarchive"\n\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains"\n\t}\n\tforward_auth 127.0.0.1:4000 {\n\t\turi /api/auth/me\n\t}\n\treverse_proxy ${port.ip}:${port.containerPort} {\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_access=[^;]*" ""\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_csrf=[^;]*" ""\n\t\theader_down Set-Cookie "^reaper_(access|csrf)=.*$" ""\n\t}\n}`;
 }
 

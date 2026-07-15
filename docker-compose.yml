@@ -53,7 +53,6 @@ services:
     network_mode: host
     environment:
       REAPER_HOST: ${REAPER_HOST:?Set REAPER_HOST in app/.env}
-      REAPER_TLS: ${REAPER_TLS:-internal}
     depends_on:
       - backend
     volumes:

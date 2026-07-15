@@ -11,7 +11,12 @@ http://{$REAPER_HOST:?Set REAPER_HOST in the Caddy environment} {
 }
 
 https://{$REAPER_HOST:?Set REAPER_HOST in the Caddy environment} {
-	tls {$REAPER_TLS:internal}
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			profile shortlived
+		}
+	}
 
 	header {
 		-Server
@@ -67,6 +72,6 @@ https://{$REAPER_HOST:?Set REAPER_HOST in the Caddy environment} {
 # Published-port snippets are generated fail-closed with the same Reaper
 # login-cookie verification used by the main app. Domain deployments publish
 # https://<route>.<APEX>; IP deployments publish https://<IP>:<containerPort>.
-# Caddy obtains public certificates for DNS names and uses its local CA for IP
-# addresses. Install the Caddy root certificate on clients to trust IP URLs.
+# Caddy obtains public certificates for DNS names and short-lived public ACME
+# certificates for IP addresses.
 import /caddy-dynamic/*.caddy
