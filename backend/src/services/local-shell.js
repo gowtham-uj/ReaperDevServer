@@ -990,11 +990,30 @@ function validatePorts(value) {
   }).sort((a, b) => a.subdomain.localeCompare(b.subdomain) || a.containerPort - b.containerPort);
 }
 
+const PUBLICATION_AUTH_FILE = "publication.json";
+
+function validateRequireReaperAuth(value) {
+  if (typeof value !== "boolean") throw new Error("requireReaperAuth must be a boolean");
+  return value;
+}
+
+async function readRequireReaperAuth(project) {
+  try {
+    const value = JSON.parse(await fs.readFile(path.join(reaperRoot(project), PUBLICATION_AUTH_FILE), "utf8"));
+    return validateRequireReaperAuth(value?.requireReaperAuth);
+  } catch (error) {
+    if (error.code === "ENOENT") return true;
+    throw error;
+  }
+}
+
 async function getProjectPorts(project) {
   assertProject(project);
   await ensureTrustedProjectState(project);
-  try { return { ports: validatePorts(JSON.parse(await fs.readFile(path.join(reaperRoot(project), "ports.json"), "utf8"))) }; }
-  catch (error) { if (error.code === "ENOENT") return { ports: [] }; throw error; }
+  let ports;
+  try { ports = validatePorts(JSON.parse(await fs.readFile(path.join(reaperRoot(project), "ports.json"), "utf8"))); }
+  catch (error) { if (error.code === "ENOENT") ports = []; else throw error; }
+  return { ports, requireReaperAuth: await readRequireReaperAuth(project) };
 }
 
 function publicationConfig() {
@@ -1051,7 +1070,10 @@ function publishedCaddyBlock(config, port) {
   const tls = config.mode === "ip"
     ? "\n\ttls {\n\t\tissuer acme {\n\t\t\tdir https://acme-v02.api.letsencrypt.org/directory\n\t\t\tprofile shortlived\n\t\t}\n\t}"
     : "";
-  return `${address} {${tls}\n\theader {\n\t\t-Server\n\t\tX-Content-Type-Options "nosniff"\n\t\tX-Frame-Options "SAMEORIGIN"\n\t\tReferrer-Policy "same-origin"\n\t\tX-Robots-Tag "noindex, nofollow, noarchive"\n\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains"\n\t}\n\tforward_auth 127.0.0.1:4000 {\n\t\turi /api/auth/me\n\t}\n\treverse_proxy ${port.ip}:${port.containerPort} {\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_access=[^;]*" ""\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_csrf=[^;]*" ""\n\t\theader_down Set-Cookie "^reaper_(access|csrf)=.*$" ""\n\t}\n}`;
+  const forwardAuth = port.requireReaperAuth !== false
+    ? "\n\tforward_auth 127.0.0.1:4000 {\n\t\turi /api/auth/me\n\t}"
+    : "";
+  return `${address} {${tls}\n\theader {\n\t\t-Server\n\t\tX-Content-Type-Options "nosniff"\n\t\tX-Frame-Options "SAMEORIGIN"\n\t\tReferrer-Policy "same-origin"\n\t\tX-Robots-Tag "noindex, nofollow, noarchive"\n\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains"\n\t}${forwardAuth}\n\treverse_proxy ${port.ip}:${port.containerPort} {\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_access=[^;]*" ""\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_csrf=[^;]*" ""\n\t\theader_down Set-Cookie "^reaper_(access|csrf)=.*$" ""\n\t}\n}`;
 }
 
 async function regenerateCaddyPorts({ quarantineInvalid = false, verifiedProjects = null } = {}) {
@@ -1064,8 +1086,9 @@ async function regenerateCaddyPorts({ quarantineInvalid = false, verifiedProject
   let config = null;
   for (const project of projects) {
     let ports;
+    let requireReaperAuth;
     try {
-      ({ ports } = await getProjectPorts(project));
+      ({ ports, requireReaperAuth } = await getProjectPorts(project));
       if (!ports.length) continue;
       config ||= publicationConfig();
       for (const port of ports) assertPublicationPortAllowed(config, port);
@@ -1075,7 +1098,7 @@ async function regenerateCaddyPorts({ quarantineInvalid = false, verifiedProject
       }
       const info = await podRuntime.podInspect(project);
       if (!info?.running || !info?.ip || !info?.isolated) throw new Error("project pod is not isolated on its private network");
-      for (const port of ports) publications.push({ project, ip: info.ip, ...port });
+      for (const port of ports) publications.push({ project, ip: info.ip, requireReaperAuth, ...port });
     } catch (error) {
       if (!quarantineInvalid) throw error;
       quarantined.add(project);
@@ -1112,24 +1135,29 @@ async function regenerateCaddyPorts({ quarantineInvalid = false, verifiedProject
   return { published: blocks.length, quarantined: [...quarantined].sort() };
 }
 
-async function updateProjectPortsUnlocked(project, clean) {
+async function updateProjectPortsUnlocked(project, clean, requireReaperAuth) {
   const operation = caddyPortOperation.then(async () => {
-    if (!podMode) {
-      await atomicJson(path.join(reaperRoot(project), "ports.json"), clean);
-      return { ports: clean };
-    }
-    await assertPublishedRoutesAvailable(project, clean);
-    const { ports: previous } = await getProjectPorts(project);
+    const previous = await getProjectPorts(project);
+    const nextRequireReaperAuth = requireReaperAuth === undefined
+      ? previous.requireReaperAuth
+      : validateRequireReaperAuth(requireReaperAuth);
+    if (podMode) await assertPublishedRoutesAvailable(project, clean);
     try {
       await atomicJson(path.join(reaperRoot(project), "ports.json"), clean);
-      await regenerateCaddyPorts();
-      await podRuntime.reloadCaddy();
-      return { ports: clean };
-    } catch (error) {
-      try {
-        await atomicJson(path.join(reaperRoot(project), "ports.json"), previous);
+      await atomicJson(path.join(reaperRoot(project), PUBLICATION_AUTH_FILE), { requireReaperAuth: nextRequireReaperAuth });
+      if (podMode) {
         await regenerateCaddyPorts();
         await podRuntime.reloadCaddy();
+      }
+      return { ports: clean, requireReaperAuth: nextRequireReaperAuth };
+    } catch (error) {
+      try {
+        await atomicJson(path.join(reaperRoot(project), "ports.json"), previous.ports);
+        await atomicJson(path.join(reaperRoot(project), PUBLICATION_AUTH_FILE), { requireReaperAuth: previous.requireReaperAuth });
+        if (podMode) {
+          await regenerateCaddyPorts();
+          await podRuntime.reloadCaddy();
+        }
       } catch (rollbackError) {
         throw new AggregateError([error, rollbackError], "published-port update failed and rollback could not restore Caddy");
       }
@@ -1140,13 +1168,14 @@ async function updateProjectPortsUnlocked(project, clean) {
   return operation;
 }
 
-async function updateProjectPorts(project, ports) {
+async function updateProjectPorts(project, ports, requireReaperAuth) {
   assertProject(project);
   const clean = validatePorts(ports);
+  if (requireReaperAuth !== undefined) validateRequireReaperAuth(requireReaperAuth);
   if (!podMode && clean.length) throw new Error("published ports require the pod runtime");
   return serializeManifest(project, () => {
     assertProject(project);
-    return updateProjectPortsUnlocked(project, clean);
+    return updateProjectPortsUnlocked(project, clean, requireReaperAuth);
   });
 }
 

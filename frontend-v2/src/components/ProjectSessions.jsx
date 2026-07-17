@@ -33,6 +33,7 @@ export function ProjectSessions(props) {
   const [newSessionName, setNewSessionName] = createSignal("");
   const [ports, setPorts] = createSignal([]);
   const [savedPorts, setSavedPorts] = createSignal("[]");
+  const [requireReaperAuth, setRequireReaperAuth] = createSignal(true);
   const [portsState, setPortsState] = createSignal("loading");
   const [portsError, setPortsError] = createSignal("");
   let sessionLoadSequence = 0;
@@ -64,8 +65,10 @@ export function ProjectSessions(props) {
     try {
       const body = await api(`${projectPath()}/ports`);
       const next = (Array.isArray(body?.ports) ? body.ports : []).map(normalizePort);
+      const nextRequireReaperAuth = body?.requireReaperAuth !== false;
       setPorts(next);
-      setSavedPorts(JSON.stringify(next));
+      setRequireReaperAuth(nextRequireReaperAuth);
+      setSavedPorts(JSON.stringify({ ports: next, requireReaperAuth: nextRequireReaperAuth }));
       setPortsState("ready");
     } catch (error) {
       setPortsState("error");
@@ -193,7 +196,7 @@ export function ProjectSessions(props) {
     return "";
   }
 
-  const dirty = () => JSON.stringify(ports()) !== savedPorts();
+  const dirty = () => JSON.stringify({ ports: ports(), requireReaperAuth: requireReaperAuth() }) !== savedPorts();
   const validationError = () => portValidation();
 
   async function savePorts(event) {
@@ -210,10 +213,15 @@ export function ProjectSessions(props) {
       subdomain: row.subdomain.trim().toLowerCase()
     }));
     try {
-      const body = await api(`${projectPath()}/ports`, { method: "PUT", body: JSON.stringify({ ports: payload }) });
+      const body = await api(`${projectPath()}/ports`, {
+        method: "PUT",
+        body: JSON.stringify({ ports: payload, requireReaperAuth: requireReaperAuth() })
+      });
       const next = (Array.isArray(body?.ports) ? body.ports : payload).map(normalizePort);
+      const nextRequireReaperAuth = body?.requireReaperAuth !== false;
       setPorts(next);
-      setSavedPorts(JSON.stringify(next));
+      setRequireReaperAuth(nextRequireReaperAuth);
+      setSavedPorts(JSON.stringify({ ports: next, requireReaperAuth: nextRequireReaperAuth }));
       setPortsState("saved");
       setTimeout(() => setPortsState((state) => state === "saved" ? "ready" : state), 1800);
     } catch (error) {
@@ -365,6 +373,31 @@ export function ProjectSessions(props) {
                   <button class="btn btn--ghost published-port-remove" type="button" onClick={() => setPorts((current) => current.filter((_, rowIndex) => rowIndex !== index()))} aria-label={`Remove published port row ${index() + 1}`}>Remove</button>
                 </fieldset>
               )}</For>
+            </div>
+            <div class="published-auth-setting">
+              <label class="published-auth-control" for="require-reaper-auth">
+                <input
+                  id="require-reaper-auth"
+                  type="checkbox"
+                  checked={requireReaperAuth()}
+                  aria-describedby="require-reaper-auth-help"
+                  onChange={(event) => {
+                    setRequireReaperAuth(event.currentTarget.checked);
+                    setPortsError("");
+                  }}
+                />
+                <span>
+                  <span class="published-auth-label">Require Reaper sign-in</span>
+                  <span id="require-reaper-auth-help" class="field__help">
+                    Disable only when the published application enforces its own authentication. Routes will be reachable without a Reaper session.
+                  </span>
+                </span>
+              </label>
+              <Show when={!requireReaperAuth()}>
+                <aside class="published-auth-warning" aria-label="Authentication warning">
+                  <strong>Reaper sign-in is disabled.</strong> Anyone who can reach a published route can access it unless the application requires its own authentication.
+                </aside>
+              </Show>
             </div>
             <button class="btn btn--outline published-port-add" type="button" onClick={() => setPorts((current) => [...current, normalizePort()])}>+ Add port</button>
             <Show when={portsError() || validationError()}><p class="field__error" role="alert">{portsError() || validationError()}</p></Show>

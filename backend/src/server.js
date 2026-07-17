@@ -1194,7 +1194,7 @@ const sessions = {
 
 const ports = {
   get: async (req, body, params) => ({ status: 200, body: await getProjectPorts(params.name) }),
-  put: async (req, body, params) => ({ status: 200, body: await updateProjectPorts(params.name, body?.ports) })
+  put: async (req, body, params) => ({ status: 200, body: await updateProjectPorts(params.name, body?.ports, body?.requireReaperAuth) })
 };
 
 /* ---------- project session log archive ---------- */

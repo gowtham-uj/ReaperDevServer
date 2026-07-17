@@ -1326,6 +1326,48 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .published-port-remove { align-self: end; min-height: 40px; color: var(--danger); }
 .published-port-add { justify-self: start; }
+.published-auth-setting {
+  display: grid;
+  gap: var(--s-3);
+  max-width: 720px;
+}
+.published-auth-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s-3);
+  cursor: pointer;
+}
+.published-auth-control input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+.published-auth-control input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.published-auth-label {
+  display: block;
+  color: var(--text-1);
+  font-size: var(--t-sm);
+  font-weight: 600;
+}
+.published-auth-control .field__help { margin-top: var(--s-1); }
+.published-auth-warning {
+  padding: var(--s-3);
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface-1));
+  border: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border-1));
+  border-radius: var(--r-md);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+.published-auth-warning strong {
+  color: var(--warning);
+  font-weight: 600;
+}
 .published-ports-actions {
   display: flex;
   align-items: center;

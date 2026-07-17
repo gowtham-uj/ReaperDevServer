@@ -249,8 +249,11 @@ async function createProject(name) {
   await fs.mkdir(path.join(root, name), { recursive: true });
 }
 
-function expectedPublishedBlock(subdomain, containerPort) {
-  return `https://${subdomain}.example.test {\n\theader {\n\t\t-Server\n\t\tX-Content-Type-Options "nosniff"\n\t\tX-Frame-Options "SAMEORIGIN"\n\t\tReferrer-Policy "same-origin"\n\t\tX-Robots-Tag "noindex, nofollow, noarchive"\n\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains"\n\t}\n\tforward_auth 127.0.0.1:4000 {\n\t\turi /api/auth/me\n\t}\n\treverse_proxy 172.30.1.9:${containerPort} {\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_access=[^;]*" ""\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_csrf=[^;]*" ""\n\t\theader_down Set-Cookie "^reaper_(access|csrf)=.*$" ""\n\t}\n}`;
+function expectedPublishedBlock(subdomain, containerPort, requireReaperAuth = true) {
+  const forwardAuth = requireReaperAuth
+    ? "\n\tforward_auth 127.0.0.1:4000 {\n\t\turi /api/auth/me\n\t}"
+    : "";
+  return `https://${subdomain}.example.test {\n\theader {\n\t\t-Server\n\t\tX-Content-Type-Options "nosniff"\n\t\tX-Frame-Options "SAMEORIGIN"\n\t\tReferrer-Policy "same-origin"\n\t\tX-Robots-Tag "noindex, nofollow, noarchive"\n\t\tStrict-Transport-Security "max-age=31536000; includeSubDomains"\n\t}${forwardAuth}\n\treverse_proxy 172.30.1.9:${containerPort} {\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_access=[^;]*" ""\n\t\theader_up Cookie "(^|;[[:space:]]*)reaper_csrf=[^;]*" ""\n\t\theader_down Set-Cookie "^reaper_(access|csrf)=.*$" ""\n\t}\n}`;
 }
 
 function expectedIpPublishedBlock(containerPort) {
@@ -368,7 +371,10 @@ test("legacy pod metadata migrates into trusted backend state without losing nam
   );
   assert.deepEqual({ ...(await shell.getProjectEnv("legacy")) }, { LEGACY_TOKEN: "preserved" });
   assert.equal(await shell.getProjectBashrc("legacy"), "alias legacy='yes'\n");
-  assert.deepEqual((await shell.getProjectPorts("legacy")).ports, [{ containerPort: 8080, subdomain: "legacy-app" }]);
+  assert.deepEqual(await shell.getProjectPorts("legacy"), {
+    ports: [{ containerPort: 8080, subdomain: "legacy-app" }],
+    requireReaperAuth: true
+  });
   assert.deepEqual(
     JSON.parse(await fs.readFile(path.join(stateRoot, "projects", "legacy", "sessions.json"), "utf8")).map((session) => session.name),
     ["main", "bot", "worker"]
@@ -743,9 +749,50 @@ test("published ports validate input and generate deterministic safe Caddy block
     { containerPort: 8080, subdomain: "web" },
     { containerPort: 3000, subdomain: "api" }
   ]);
-  assert.deepEqual(result.ports.map((item) => item.subdomain), ["api", "web"]);
+  assert.deepEqual(result, {
+    ports: [
+      { containerPort: 3000, subdomain: "api" },
+      { containerPort: 8080, subdomain: "web" }
+    ],
+    requireReaperAuth: true
+  });
   assert.equal(await fs.readFile(caddyFile, "utf8"), `${expectedPublishedBlock("api", 3000)}\n\n${expectedPublishedBlock("web", 8080)}\n`);
   assert.equal(fake.reloads, reloadsBefore + 1);
+});
+
+test("published ports can explicitly disable Reaper auth and round-trip the setting", async () => {
+  await createProject("public-ports-project");
+  assert.deepEqual(await shell.getProjectPorts("public-ports-project"), { ports: [], requireReaperAuth: true });
+
+  const result = await shell.updateProjectPorts(
+    "public-ports-project",
+    [{ containerPort: 4173, subdomain: "public-app" }],
+    false
+  );
+  assert.deepEqual(result, {
+    ports: [{ containerPort: 4173, subdomain: "public-app" }],
+    requireReaperAuth: false
+  });
+  assert.deepEqual(await shell.getProjectPorts("public-ports-project"), result);
+  assert.deepEqual(
+    await shell.updateProjectPorts("public-ports-project", result.ports),
+    result
+  );
+  const generated = await fs.readFile(caddyFile, "utf8");
+  assert.match(generated, new RegExp(expectedPublishedBlock("public-app", 4173, false).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(
+    generated.match(/https:\/\/public-app\.example\.test \{[\s\S]*?\n\}/)?.[0] || "",
+    /forward_auth/
+  );
+});
+
+test("malformed publication auth settings are rejected fail-closed", async () => {
+  await createProject("malformed-auth-project");
+  await shell.getProjectPorts("malformed-auth-project");
+  const trustedState = path.join(stateRoot, "projects", "malformed-auth-project");
+  await fs.writeFile(path.join(trustedState, "publication.json"), JSON.stringify({ requireReaperAuth: "false" }));
+  await assert.rejects(() => shell.getProjectPorts("malformed-auth-project"), /requireReaperAuth must be a boolean/);
+  await fs.rm(path.join(trustedState, "publication.json"));
 });
 
 test("published subdomains are globally unique across projects", async () => {
@@ -780,18 +827,25 @@ test("IP publishing binds the container port on the Reaper host", async () => {
   }
 });
 
-test("failed Caddy reload restores the prior published-port configuration", async () => {
+test("failed Caddy reload restores the prior published ports and auth setting", async () => {
+  const before = await shell.getProjectPorts("ports-project");
   fake.failNextReload();
   await assert.rejects(
-    () => shell.updateProjectPorts("ports-project", [{ containerPort: 9000, subdomain: "replacement" }]),
+    () => shell.updateProjectPorts(
+      "ports-project",
+      [{ containerPort: 9000, subdomain: "replacement" }],
+      false
+    ),
     /simulated Caddy reload failure/
   );
+  assert.deepEqual(await shell.getProjectPorts("ports-project"), before);
   assert.deepEqual(
-    (await shell.getProjectPorts("ports-project")).ports.map((port) => port.subdomain),
-    ["api", "web"]
+    JSON.parse(await fs.readFile(path.join(stateRoot, "projects", "ports-project", "publication.json"), "utf8")),
+    { requireReaperAuth: true }
   );
   const restored = await fs.readFile(caddyFile, "utf8");
   assert.match(restored, /https:\/\/api\.example\.test/);
+  assert.match(restored, /forward_auth 127\.0\.0\.1:4000/);
   assert.doesNotMatch(restored, /replacement\.example\.test/);
 });
 
