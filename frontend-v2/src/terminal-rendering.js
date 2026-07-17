@@ -1,5 +1,8 @@
 export const LIVE_WRITE_BATCH_MS = 8;
 export const FIT_VERIFY_DELAYS_MS = Object.freeze([48, 240]);
+export const MIN_RESIZE_OUTPUT_SETTLE_MS = 160;
+export const MAX_RESIZE_OUTPUT_SETTLE_MS = 500;
+export const RESIZE_OUTPUT_SETTLE_PADDING_MS = 80;
 
 function positiveInteger(value) {
   return Number.isInteger(value) && value > 0 ? value : 0;
@@ -19,6 +22,14 @@ export function terminalGeometryOverflows(hostRect, screenRect, tolerance = 1) {
 export function shouldRefitTerminal({ current, proposed, hostRect, screenRect }) {
   return terminalDimensionsDiffer(current, proposed) ||
     terminalGeometryOverflows(hostRect, screenRect);
+}
+
+export function terminalResizeSettleDelay(roundTripMs) {
+  const measured = Number.isFinite(roundTripMs) && roundTripMs >= 0 ? roundTripMs : 80;
+  return Math.max(
+    MIN_RESIZE_OUTPUT_SETTLE_MS,
+    Math.min(MAX_RESIZE_OUTPUT_SETTLE_MS, Math.round(measured + RESIZE_OUTPUT_SETTLE_PADDING_MS))
+  );
 }
 
 export function joinTerminalPayloads(payloads) {

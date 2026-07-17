@@ -4,7 +4,8 @@ import {
   joinTerminalPayloads,
   shouldRefitTerminal,
   terminalDimensionsDiffer,
-  terminalGeometryOverflows
+  terminalGeometryOverflows,
+  terminalResizeSettleDelay
 } from "./terminal-rendering.js";
 
 test("font metric drift requests a second terminal fit", () => {
@@ -29,6 +30,12 @@ test("geometry overflow is detected even before proposed dimensions change", () 
     { width: 1000, height: 600 },
     { width: 1100, height: 580 }
   ), true);
+});
+
+test("resize output waits for the remote pane to repaint", () => {
+  assert.equal(terminalResizeSettleDelay(undefined), 160);
+  assert.equal(terminalResizeSettleDelay(118), 198);
+  assert.equal(terminalResizeSettleDelay(1_000), 500);
 });
 
 test("live write batching preserves split control sequences byte-for-byte", () => {

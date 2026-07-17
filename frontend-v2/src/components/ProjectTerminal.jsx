@@ -23,7 +23,8 @@ import {
   FIT_VERIFY_DELAYS_MS,
   LIVE_WRITE_BATCH_MS,
   joinTerminalPayloads,
-  shouldRefitTerminal
+  shouldRefitTerminal,
+  terminalResizeSettleDelay
 } from "../terminal-rendering.js";
 import "@xterm/xterm/css/xterm.css";
 
@@ -87,7 +88,8 @@ export function ProjectTerminal(props) {
   let heartbeatMs = HEARTBEAT_MS;
   let missedPongs = 0;
   let fitFrame;
-  let resizeTimer;
+  let resizeOutputTimer;
+  let resizeOutputSettling = false;
   let fitVerificationTimers = [];
   let fontLoadingHandler;
   let toolNoticeTimer;
@@ -313,8 +315,6 @@ export function ProjectTerminal(props) {
   }
 
   function sendResize() {
-    clearTimeout(resizeTimer);
-    resizeTimer = undefined;
     const stream = streams.get(activeStreamId);
     if (!stream || !helloAcknowledged) return;
     const { cols, rows } = desiredDimensions();
@@ -328,25 +328,43 @@ export function ProjectTerminal(props) {
       stream.rows = rows;
     }
   }
+  function beginResizeOutputSettlement() {
+    resizeOutputSettling = true;
+    clearTimeout(resizeOutputTimer);
+    const active = streams.get(activeStreamId);
+    if (active?.liveWriteTimer !== undefined) {
+      clearTimeout(active.liveWriteTimer);
+      active.liveWriteTimer = undefined;
+    }
+    resizeOutputTimer = setTimeout(() => {
+      resizeOutputTimer = undefined;
+      resizeOutputSettling = false;
+      const current = streams.get(activeStreamId);
+      if (current) flushLiveTerminalFrames(current);
+    }, terminalResizeSettleDelay(roundTripMs()));
+  }
 
   function clearFitVerificationTimers() {
     for (const timer of fitVerificationTimers) clearTimeout(timer);
     fitVerificationTimers = [];
   }
 
-  function verifyTerminalFit() {
-    if (!fit || !term || !hostRef || hostRef.clientWidth < 1 || hostRef.clientHeight < 1) return;
+  function terminalFitNeedsAnotherPass() {
     let proposed;
-    try { proposed = fit.proposeDimensions?.(); } catch { return; }
+    try { proposed = fit?.proposeDimensions?.(); } catch { return false; }
     const screen = terminalCanvasRef?.querySelector?.(".xterm-screen");
     const screenRect = screen?.getBoundingClientRect?.();
-    if (!proposed || !screenRect || !shouldRefitTerminal({
+    return Boolean(proposed && screenRect && shouldRefitTerminal({
       current: { cols: term.cols, rows: term.rows },
       proposed,
       hostRect: { width: hostRef.clientWidth, height: hostRef.clientHeight },
       screenRect: { width: screenRect.width, height: screenRect.height }
-    })) return;
-    fitTerminal({ verify: false });
+    }));
+  }
+
+  function verifyTerminalFit() {
+    if (!fit || !term || !hostRef || hostRef.clientWidth < 1 || hostRef.clientHeight < 1) return;
+    if (terminalFitNeedsAnotherPass()) fitTerminal({ verify: false });
   }
 
   function queueFitVerification() {
@@ -362,10 +380,13 @@ export function ProjectTerminal(props) {
 
   function fitTerminal({ verify = true } = {}) {
     if (!fit || !term || !hostRef || hostRef.clientWidth < 1 || hostRef.clientHeight < 1) return;
-    try { fit.fit(); } catch {}
+    for (let pass = 0; pass < 3; pass += 1) {
+      try { fit.fit(); } catch { break; }
+      if (!terminalFitNeedsAnotherPass()) break;
+    }
     setDimensions({ cols: term.cols, rows: term.rows });
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(sendResize, 80);
+    beginResizeOutputSettlement();
+    sendResize();
     if (verify) queueFitVerification();
   }
 
@@ -482,6 +503,7 @@ export function ProjectTerminal(props) {
     if (stream.closed) return;
     stream.liveWriteQueue.push(frame);
     if (stream.liveWriteTimer !== undefined) return;
+    if (resizeOutputSettling) return;
     if (document.visibilityState !== "visible") {
       stream.liveWriteTimer = 0;
       queueMicrotask(() => flushLiveTerminalFrames(stream));
@@ -1353,7 +1375,7 @@ export function ProjectTerminal(props) {
       disposed = true;
       clearTimeout(reconnectTimer);
       clearTimeout(toolNoticeTimer);
-      clearTimeout(resizeTimer);
+      clearTimeout(resizeOutputTimer);
       clearFitVerificationTimers();
       document.fonts?.removeEventListener?.("loadingdone", fontLoadingHandler);
       clearInterval(heartbeatTimer);
