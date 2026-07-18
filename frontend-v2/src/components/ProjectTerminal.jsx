@@ -35,6 +35,7 @@ const MOBILE_FONT_SIZE = 12;
 const MIN_FONT_SIZE = 11;
 const MAX_FONT_SIZE = 20;
 const FONT_SIZE_STORAGE_KEY = "reaper:terminal-font-size";
+const SESSION_STORAGE_KEY_PREFIX = "reaper:terminal-session:";
 const SEARCH_DECORATIONS = Object.freeze({
   matchBackground: "#34343c",
   matchBorder: "#565661",
@@ -146,6 +147,7 @@ export function ProjectTerminal(props) {
   const [newSessionName, setNewSessionName] = createSignal("");
 
   const projectPath = () => `/api/projects/${encodeURIComponent(props.name)}`;
+  const selectedSessionStorageKey = () => `${SESSION_STORAGE_KEY_PREFIX}${encodeURIComponent(props.name)}`;
   const activeSession = () => sessions().find((session) => session.name === selectedName());
   const editingSession = () => sessions().find((session) => session.name === editingName());
   const connected = () => connectionState() === "ready" && inputEnabled;
@@ -1270,6 +1272,12 @@ export function ProjectTerminal(props) {
   }
 
   createEffect(() => {
+    const name = selectedName();
+    if (!name) return;
+    try { window.localStorage.setItem(selectedSessionStorageKey(), name); } catch {}
+  });
+
+  createEffect(() => {
     activeInteractionGeneration += 1;
     if (props.active === false) {
       if (expanded()) {
@@ -1283,6 +1291,10 @@ export function ProjectTerminal(props) {
   });
 
   onMount(() => {
+    try {
+      const storedSession = window.localStorage.getItem(selectedSessionStorageKey());
+      if (storedSession && SESSION_NAME.test(storedSession)) setSelectedName(storedSession);
+    } catch {}
     const mobile = window.matchMedia("(max-width: 720px)");
     let initialFontSize = mobile.matches ? MOBILE_FONT_SIZE : DEFAULT_FONT_SIZE;
     try {
