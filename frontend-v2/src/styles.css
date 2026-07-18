@@ -1140,16 +1140,22 @@ input, textarea, select { font: inherit; color: inherit; }
   display: none;
 }
 .terminal-mobile-controls__trigger {
-  display: grid;
-  inline-size: var(--terminal-touch-target);
+  display: inline-flex;
+  inline-size: auto;
+  min-inline-size: 72px;
   block-size: var(--terminal-touch-target);
-  place-items: center;
-  color: var(--text-2);
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  padding-inline: var(--s-2);
+  color: var(--text-1);
   background: var(--surface-2);
   border: 1px solid var(--border-2);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-1);
   cursor: pointer;
+  font-size: var(--t-xs);
+  font-weight: 600;
   touch-action: manipulation;
   transition: color var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
 }
@@ -1614,7 +1620,7 @@ input, textarea, select { font: inherit; color: inherit; }
   .published-ports-actions .btn { min-height: 44px; }
 }
 
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 720px) {
   .terminal-tab,
   .terminal-rail-action,
   .terminal-connection,

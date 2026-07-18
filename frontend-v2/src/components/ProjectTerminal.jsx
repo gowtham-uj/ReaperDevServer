@@ -1733,6 +1733,7 @@ export function ProjectTerminal(props) {
                   <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                   <path d="M7 9h2M11 9h2M15 9h2M7 13h2M11 13h6"></path>
                 </svg>
+                <span>Keys</span>
               </summary>
               <div class="terminal-mobile-controls__popover">
                 <div class="terminal-mobile-controls__section terminal-mobile-controls__section--arrows">
