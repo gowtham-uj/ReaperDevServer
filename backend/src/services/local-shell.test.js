@@ -917,38 +917,38 @@ test("project environment is validated, persisted, and applied to future tmux pr
   await assert.rejects(() => shell.setProjectEnv("environment", { "BAD-NAME": "x" }), /invalid environment variable name/);
 });
 
-test("Claude context defaults apply without persisting project environment values", async () => {
+test("no blanket context caps are injected without explicit configuration", async () => {
   await createProject("claude-context-defaults");
   await shell.openProjectShell({ path: "claude-context-defaults", sessionName: "main" });
   const bashrc = fake.installed
     .filter((item) => item.project === "claude-context-defaults" && item.target.endsWith("/rcfile"))
     .at(-1)?.content || "";
-  assert.match(bashrc, /export CLAUDE_CODE_MAX_CONTEXT_TOKENS='272000'/);
-  assert.match(bashrc, /export CLAUDE_CODE_AUTO_COMPACT_WINDOW='220000'/);
-  assert.match(bashrc, /export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE='90'/);
+  assert.doesNotMatch(bashrc, /CLAUDE_CODE_MAX_CONTEXT_TOKENS/);
+  assert.doesNotMatch(bashrc, /CLAUDE_CODE_AUTO_COMPACT_WINDOW/);
+  assert.doesNotMatch(bashrc, /CLAUDE_AUTOCOMPACT_PCT_OVERRIDE/);
   assert.deepEqual({ ...(await shell.getProjectEnv("claude-context-defaults")) }, {});
 });
 
-test("global and project environment values override Claude context defaults", async () => {
+test("per-project and global env caps apply only where explicitly set", async () => {
   shell.setGlobalEnvProvider(async () => ({
-    CLAUDE_CODE_MAX_CONTEXT_TOKENS: "260000",
-    CLAUDE_CODE_AUTO_COMPACT_WINDOW: "210000",
+    CLAUDE_CODE_MAX_CONTEXT_TOKENS: "272000",
   }));
   try {
     await createProject("claude-context-overrides");
     await shell.openProjectShell({ path: "claude-context-overrides", sessionName: "main" });
     await shell.setProjectEnv("claude-context-overrides", {
-      CLAUDE_CODE_AUTO_COMPACT_WINDOW: "190000",
+      CLAUDE_CODE_AUTO_COMPACT_WINDOW: "220000",
+      CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "90",
     });
     const bashrc = fake.installed
       .filter((item) => item.project === "claude-context-overrides" && item.target.endsWith("/rcfile"))
       .at(-1)?.content || "";
-    assert.match(bashrc, /export CLAUDE_CODE_MAX_CONTEXT_TOKENS='260000'/);
-    assert.match(bashrc, /export CLAUDE_CODE_AUTO_COMPACT_WINDOW='190000'/);
+    assert.match(bashrc, /export CLAUDE_CODE_MAX_CONTEXT_TOKENS='272000'/);
+    assert.match(bashrc, /export CLAUDE_CODE_AUTO_COMPACT_WINDOW='220000'/);
     assert.match(bashrc, /export CLAUDE_AUTOCOMPACT_PCT_OVERRIDE='90'/);
     assert.deepEqual(
       { ...(await shell.getProjectEnv("claude-context-overrides")) },
-      { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "190000" }
+      { CLAUDE_CODE_AUTO_COMPACT_WINDOW: "220000", CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "90" }
     );
   } finally {
     shell.setGlobalEnvProvider(async () => Object.create(null));

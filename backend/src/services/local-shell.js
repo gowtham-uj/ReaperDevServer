@@ -33,11 +33,7 @@ const SESSION_ARCHIVE_DIR = path.join(STATE_DIR, "archive");
 const TMUX_SOCKET = "/reaper/tmux.sock";
 const TMUX_CONFIG = "/reaper/tmux.conf";
 const SESSION_NAME_RE = /^[a-z0-9-]{1,32}$/;
-const DEFAULT_CLAUDE_CONTEXT_ENV = Object.freeze({
-  CLAUDE_CODE_MAX_CONTEXT_TOKENS: "272000",
-  CLAUDE_CODE_AUTO_COMPACT_WINDOW: "220000",
-  CLAUDE_AUTOCOMPACT_PCT_OVERRIDE: "90",
-});
+const DEFAULT_CLAUDE_CONTEXT_ENV = Object.freeze({});
 const SUBDOMAIN_RE = /^(?!-)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/;
 const IP_PUBLISH_MIN_PORT = 1024;
